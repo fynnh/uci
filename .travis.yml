@@ -1,0 +1,66 @@
+##############################################################################################
+#
+# Travis CI configuration file
+# 
+# Set the required secrets in the build settings of the project:
+#   - BINTRAY_USER
+#   - BINTRAY_API_KEY
+#   - GITHUB_API_KEY
+#
+##############################################################################################
+
+env:
+  global:
+  - PACKAGE_NAME=uci
+  - BINTRAY_REPO_NAME=debian
+  - BINTRAY_LICENSE=ISC
+
+sudo: required
+dist: trusty
+language: cpp
+compiler: gcc
+addons:
+  apt:
+    packages:
+    - cmake
+    - lua5.2
+    - libjson-c-dev
+    - liblua5.2-dev
+
+before_install:
+  - echo "deb https://dl.bintray.com/$BINTRAY_USER/debian trusty main" | sudo tee -a /etc/apt/sources.list
+  - sudo apt-get update
+  - sudo apt-get install ubox --allow-unauthenticated
+  - export DATE=$(date +'%Y%m%d%H%M%S')
+  - export BUILD_VERSION=1.$DATE
+  - export BUILD_DATE=$(date "+%Y%m%d")
+
+script:
+- cmake . -DBUILD_LUA=OFF -DMINOR="${DATE}"
+- make -j1
+- make package
+
+before_deploy:
+  # Set the packages name and details in the descriptor file
+  - sed -i "s/__NAME__/$PACKAGE_NAME/g" bintray-descriptor.json
+  - sed -i "s/__REPO_NAME__/$BINTRAY_REPO_NAME/g" bintray-descriptor.json
+  - sed -i "s/__SUBJECT__/$BINTRAY_USER/g" bintray-descriptor.json
+  - sed -i "s/__LICENSE__/$BINTRAY_LICENSE/g" bintray-descriptor.json
+  - sed -i "s/__VERSION__/$BUILD_VERSION/g" bintray-descriptor.json
+  - git tag "${DATE}" || true
+
+deploy:
+  - provider: releases
+    api_key: $GITHUB_API_KEY
+    file_glob: true
+    file: uci-*-Linux.deb
+    skip_cleanup: true
+    on:
+      branch: master
+  - provider: bintray
+    file: bintray-descriptor.json
+    user: $BINTRAY_USER
+    key: $BINTRAY_API_KEY
+    skip_cleanup: true
+    on:
+      branch: master
