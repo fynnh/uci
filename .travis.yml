@@ -14,31 +14,24 @@ env:
   - PACKAGE_NAME=uci
   - BINTRAY_REPO_NAME=debian
   - BINTRAY_LICENSE=ISC
-
+  matrix:
+  - ARCHITECTURE=trusty/amd64
+  - ARCHITECTURE=trusty/i386
+  
 sudo: required
-dist: trusty
-language: cpp
-compiler: gcc
-addons:
-  apt:
-    packages:
-    - cmake
-    - lua5.2
-    - libjson-c-dev
-    - liblua5.2-dev
-
+services:
+  - docker
+    
 before_install:
-  - echo "deb https://dl.bintray.com/$BINTRAY_USER/debian trusty main" | sudo tee -a /etc/apt/sources.list
-  - sudo apt-get update
-  - sudo apt-get install ubox --allow-unauthenticated
-  - export DATE=$(date +'%Y%m%d%H%M%S')
-  - export BUILD_VERSION=1.$DATE
-  - export BUILD_DATE=$(date "+%Y%m%d")
+  - docker build -t $ARCHITECTURE $ARCHITECTURE
 
 script:
-- cmake . -DBUILD_LUA=OFF -DMINOR="${DATE}"
-- make -j1
-- make package
+  - export NUMBER=${TRAVIS_BUILD_NUMBER}
+  - export BUILD_VERSION=1.$NUMBER
+  - export ARCH=$(basename $ARCHITECTURE)
+  - export DIST=$(dirname $ARCHITECTURE)
+  - docker run -v $PWD:/tmp $ARCHITECTURE /bin/sh -c "cd /tmp; cmake . -DBUILD_LUA=OFF -DMINOR=${NUMBER}; make -j1; make package"
+  - cp ${PACKAGE_NAME}-${BUILD_VERSION}-Linux.deb ${PACKAGE_NAME}-${BUILD_VERSION}-${DIST}_${ARCH}.deb 
 
 before_deploy:
   # Set the packages name and details in the descriptor file
@@ -47,13 +40,17 @@ before_deploy:
   - sed -i "s/__SUBJECT__/$BINTRAY_USER/g" bintray-descriptor.json
   - sed -i "s/__LICENSE__/$BINTRAY_LICENSE/g" bintray-descriptor.json
   - sed -i "s/__VERSION__/$BUILD_VERSION/g" bintray-descriptor.json
-  - git tag "${DATE}" || true
+  - sed -i "s/__ARCHITECTURE__/$ARCH/g" bintray-descriptor.json
+  - sed -i "s/__DIST__/$DIST/g" bintray-descriptor.json
+  - cat bintray-descriptor.json
+  - ls
+  - git tag "${BUILD_VERSION}" || true
 
 deploy:
   - provider: releases
     api_key: $GITHUB_API_KEY
     file_glob: true
-    file: uci-*-Linux.deb
+    file: ${PACKAGE_NAME}-*-${DIST}_${ARCH}.deb 
     skip_cleanup: true
     on:
       branch: master
