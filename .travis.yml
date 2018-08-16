@@ -42,8 +42,6 @@ before_deploy:
   - sed -i "s/__VERSION__/$BUILD_VERSION/g" bintray-descriptor.json
   - sed -i "s/__ARCHITECTURE__/$ARCH/g" bintray-descriptor.json
   - sed -i "s/__DIST__/$DIST/g" bintray-descriptor.json
-  - cat bintray-descriptor.json
-  - ls
   - git tag "${BUILD_VERSION}" || true
 
 deploy:
